@@ -3,21 +3,21 @@
 
 A console-based Java mini project that generates exam seating arrangements for
 students across multiple rooms, while trying to avoid seating students of the
-same branch/class next to each other.
+The same branch or class appears next to one another.
 
 ## Features
 
-1. **Add Student** – Store Roll No, Name, and Branch.
-2. **Add Room** – Define a room by Room No, number of rows, and number of columns.
-3. **View All Students** – List all students currently added.
-4. **View All Rooms** – List all rooms and their seating capacity.
-5. **Generate Seating Arrangement** – Automatically allots students to seats,
-   avoiding same-branch neighbours (left/right/up/down) wherever possible.
-6. **Display Seating Charts** – Prints a grid view of every room's seating.
-7. **Save Seating Arrangement to File** – Exports the full seating report as a `.txt` file.
-8. **Load Students from File** – Bulk-import students from a CSV-style text file.
-9. **Search Student Seat** – Look up which room/row/column a student is seated in.
-10. **Show Statistics** – Total students, total rooms, total capacity, and branch-wise counts.
+– To add a student, store their roll number, name, and branch.
+2. **Add Room** – A room should be defined by giving its Room No, the number of rows, and the number of columns.
+– View All Students: display a list of all students who have currently been added.
+4. **View All Rooms** – Provide a list of all the rooms together with their seating capacity.
+– Generate the seating arrangement by automatically assigning seats to the students,
+   Wherever possible, avoid having neighbours on the same branch (to the left/right/up/down).
+6. **Show the seating charts** – it prints out a grid view of the seating arrangement in each room.
+7. **Save Seating Arrangement to File** – The complete seating report is exported as a .txt file.
+– Import students from a file** using a CSV-style text file.
+9. **Search for a student's seat** – Find out which room, row, and column the student is sitting in.
+10. **Show Statistics** – the total number of students, the total number of rooms, the total capacity, and the figures broken down by branch.
 
 ## Project Structure
 
@@ -34,21 +34,21 @@ ExamSeatingGenerator.java
 
 ## How the Seating Logic Works
 
-1. Students are grouped by branch.
-2. A round-robin (interleaved) ordering is built so that consecutive students
-   in the list belong to different branches as often as possible.
-3. While filling each room row by row, the generator checks the **left** and
-   **up** neighbour of every seat. If the next candidate would clash
+1. The students are divided according to their branch.
+2. A round-robin (interleaved) order is arranged in such a way that the students come one after another
+   Wherever possible, the items should be assigned to different branches.
+3. The generator, while filling each row of rooms, checks the **left** and
+   Every seat has a neighbour. If the following candidate were to clash
    (same branch as a neighbour), it looks ahead in the list for a
-   non-clashing student and swaps them in.
-4. If no clash-free student is available, it falls back to the next student
+   The student who doesn't clash with him is then substituted in.
+4. If there is no available student who does not cause a clash, the system resorts to the next student.
    in line (a clash may occasionally be unavoidable when one branch heavily
    outnumbers the others).
 
 ## Requirements
 
 - Java JDK 8 or above
-- No external libraries — uses only `java.util` and `java.io`
+- No external libraries. Uses only `java.util` and `java.io`.
 
 ## How to Compile & Run
 
@@ -60,12 +60,12 @@ java ExamSeatingGenerator
 ## Usage Walkthrough
 
 1. Run the program.
-2. Choose option `1` a few times to add students (Roll No, Name, Branch).
-3. Choose option `2` to add one or more rooms (Room No, Rows, Columns).
-4. Choose option `5` to generate the seating arrangement.
-5. Choose option `6` to view the seating chart in the console.
-6. Choose option `7` to save the arrangement as a text file (e.g. `seating.txt`).
-7. Choose option `9` anytime to check where a specific student is seated.
+2. Press option `1` a number of times if you want to add students (Roll No, Name, Branch).
+To add one or more rooms choose option 2.
+4. To generate the seating arrangement select option 5.
+To view the seating chart in the console please select option 6.
+To save the arrangement as a text file choose option 7 (for example seating.txt).
+7. If you want to see where a particular student is sitting, select option 9.
 
 ### Bulk-loading students from a file (option 8)
 
@@ -79,7 +79,7 @@ rollNo,name,branch
 104,Sana Khan,CSE
 ```
 
-Then choose option `8` and enter the file name/path when prompted.
+Instead, select number 8 and type in the file name or path when asked to.
 
 ## Sample Output (Seating Chart)
 
