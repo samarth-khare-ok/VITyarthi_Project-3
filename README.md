@@ -7,7 +7,7 @@ The same branch or class appears next to one another.
 
 ## Features
 
-– To add a student, store their roll number, name, and branch.
+1. To add a student, store their roll number, name, and branch.
 2. **Add Room** – A room should be defined by giving its Room No, the number of rows, and the number of columns.
 – View All Students: display a list of all students who have currently been added.
 4. **View All Rooms** – Provide a list of all the rooms together with their seating capacity.
