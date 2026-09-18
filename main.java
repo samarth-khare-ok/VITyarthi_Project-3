@@ -1,444 +1,408 @@
-import java.util.Scanner;
+/*
+ * ============================================================
+ *  EXAM SEATING ARRANGEMENT GENERATOR
+ *  A Java mini project (console based)
+ * ------------------------------------------------------------
+ *  Features:
+ *   1. Add / Remove students (Roll No, Name, Branch/Class)
+ *   2. Add / Remove exam rooms (Room No, Rows, Columns)
+ *   3. Generate seating arrangement such that students from the
+ *      SAME branch are not seated next to each other
+ *      (left/right/front/back) as far as possible.
+ *   4. Display room-wise seating chart
+ *   5. Save seating arrangement to a text file
+ *   6. Load student list from a text file
+ *   7. Search a student's allotted seat
+ *   8. View overall statistics
+ * ============================================================
+ */
 
-public class Main {
+import java.io.*;
+import java.util.*;
 
-    private static final Scanner scanner =
-            new Scanner(System.in);
+/* ---------------------- Student Class ---------------------- */
+class Student {
+    private String rollNo;
+    private String name;
+    private String branch;
 
-    private static final IncidentManager manager =
-            new IncidentManager();
+    public Student(String rollNo, String name, String branch) {
+        this.rollNo = rollNo;
+        this.name = name;
+        this.branch = branch;
+    }
+
+    public String getRollNo() { return rollNo; }
+    public String getName() { return name; }
+    public String getBranch() { return branch; }
+
+    @Override
+    public String toString() {
+        return rollNo + " | " + name + " | " + branch;
+    }
+}
+
+/* ---------------------- Room Class ---------------------- */
+class Room {
+    private String roomNo;
+    private int rows;
+    private int cols;
+    private Student[][] seats;
+
+    public Room(String roomNo, int rows, int cols) {
+        this.roomNo = roomNo;
+        this.rows = rows;
+        this.cols = cols;
+        this.seats = new Student[rows][cols];
+    }
+
+    public String getRoomNo() { return roomNo; }
+    public int getRows() { return rows; }
+    public int getCols() { return cols; }
+    public int getCapacity() { return rows * cols; }
+    public Student[][] getSeats() { return seats; }
+
+    public void placeStudent(int r, int c, Student s) {
+        seats[r][c] = s;
+    }
+
+    public boolean isFull() {
+        for (Student[] row : seats)
+            for (Student s : row)
+                if (s == null) return false;
+        return true;
+    }
+
+    public void printChart() {
+        System.out.println("\n===== Room: " + roomNo + " (" + rows + " x " + cols + ") =====");
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                Student s = seats[i][j];
+                if (s == null) {
+                    System.out.printf("%-18s", "[ EMPTY ]");
+                } else {
+                    System.out.printf("%-18s", "[" + s.getRollNo() + "-" + s.getBranch() + "]");
+                }
+            }
+            System.out.println();
+        }
+    }
+}
+
+/* ---------------------- Seating Generator ---------------------- */
+class SeatingGenerator {
+    private List<Room> rooms;
+
+    public SeatingGenerator(List<Room> rooms) {
+        this.rooms = rooms;
+    }
+
+    /*
+     * Generates seating such that adjacent seats (left, right, up, down)
+     * do not belong to the same branch, wherever possible.
+     * Strategy: Group students branch-wise, then interleave students
+     * from different branches while filling seats row by row.
+     */
+    public void generateSeating(List<Student> studentList) {
+        // Group students by branch
+        Map<String, Queue<Student>> branchMap = new LinkedHashMap<>();
+        for (Student s : studentList) {
+            branchMap.computeIfAbsent(s.getBranch(), k -> new LinkedList<>()).add(s);
+        }
+
+        // Create a round-robin ordering of students across branches
+        List<Student> interleaved = new ArrayList<>();
+        boolean added;
+        do {
+            added = false;
+            for (Queue<Student> q : branchMap.values()) {
+                if (!q.isEmpty()) {
+                    interleaved.add(q.poll());
+                    added = true;
+                }
+            }
+        } while (added);
+
+        int index = 0;
+        int total = interleaved.size();
+
+        for (Room room : rooms) {
+            for (int i = 0; i < room.getRows(); i++) {
+                for (int j = 0; j < room.getCols(); j++) {
+                    if (index >= total) return; // no more students
+                    Student candidate = interleaved.get(index);
+
+                    // Try to avoid same-branch neighbours by looking ahead
+                    if (clashesWithNeighbour(room, i, j, candidate)) {
+                        int swapIndex = findNonClashingCandidate(room, i, j, interleaved, index);
+                        if (swapIndex != -1) {
+                            Collections.swap(interleaved, index, swapIndex);
+                            candidate = interleaved.get(index);
+                        }
+                    }
+                    room.placeStudent(i, j, candidate);
+                    index++;
+                }
+            }
+        }
+    }
+
+    private boolean clashesWithNeighbour(Room room, int r, int c, Student candidate) {
+        Student left = (c > 0) ? room.getSeats()[r][c - 1] : null;
+        Student up = (r > 0) ? room.getSeats()[r - 1][c] : null;
+
+        if (left != null && left.getBranch().equals(candidate.getBranch())) return true;
+        if (up != null && up.getBranch().equals(candidate.getBranch())) return true;
+        return false;
+    }
+
+    private int findNonClashingCandidate(Room room, int r, int c, List<Student> pool, int fromIndex) {
+        Student left = (c > 0) ? room.getSeats()[r][c - 1] : null;
+        Student up = (r > 0) ? room.getSeats()[r - 1][c] : null;
+
+        for (int k = fromIndex + 1; k < pool.size(); k++) {
+            Student cand = pool.get(k);
+            boolean clashLeft = (left != null && left.getBranch().equals(cand.getBranch()));
+            boolean clashUp = (up != null && up.getBranch().equals(cand.getBranch()));
+            if (!clashLeft && !clashUp) return k;
+        }
+        return -1; // no better candidate found
+    }
+}
+
+/* ---------------------- File Handler ---------------------- */
+class FileHandler {
+
+    // Save seating chart of all rooms to a text file
+    public static void saveSeatingToFile(List<Room> rooms, String fileName) {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(fileName))) {
+            pw.println("EXAM SEATING ARRANGEMENT REPORT");
+            pw.println("================================\n");
+            for (Room room : rooms) {
+                pw.println("Room: " + room.getRoomNo() + "  (" + room.getRows() + " x " + room.getCols() + ")");
+                pw.println("--------------------------------");
+                Student[][] seats = room.getSeats();
+                for (int i = 0; i < room.getRows(); i++) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int j = 0; j < room.getCols(); j++) {
+                        Student s = seats[i][j];
+                        sb.append(s == null ? "[EMPTY]" : "[" + s.getRollNo() + "-" + s.getBranch() + "]");
+                        sb.append("\t");
+                    }
+                    pw.println(sb.toString());
+                }
+                pw.println();
+            }
+            System.out.println("Seating arrangement saved to file: " + fileName);
+        } catch (IOException e) {
+            System.out.println("Error while saving file: " + e.getMessage());
+        }
+    }
+
+    // Load student list from a CSV-like text file: rollNo,name,branch
+    public static List<Student> loadStudentsFromFile(String fileName) {
+        List<Student> list = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                String[] parts = line.split(",");
+                if (parts.length == 3) {
+                    list.add(new Student(parts[0].trim(), parts[1].trim(), parts[2].trim()));
+                }
+            }
+            System.out.println("Loaded " + list.size() + " students from " + fileName);
+        } catch (IOException e) {
+            System.out.println("Error while reading file: " + e.getMessage());
+        }
+        return list;
+    }
+}
+
+/* ---------------------- Main Application ---------------------- */
+public class ExamSeatingGenerator {
+
+    private static List<Student> students = new ArrayList<>();
+    private static List<Room> rooms = new ArrayList<>();
+    private static Scanner sc = new Scanner(System.in);
 
     public static void main(String[] args) {
-
-        System.out.println(
-                "========================================"
-        );
-
-        System.out.println(
-                "          CYBERSHIELD LITE"
-        );
-
-        System.out.println(
-                "   Cyber Incident Response Simulator"
-        );
-
-        System.out.println(
-                "========================================"
-        );
-
-        loadSampleIncidents();
-
-        boolean running = true;
-
-        while (running) {
-
-            showMenu();
-
-            int choice = readInt(
-                    "Enter your choice: "
-            );
-
+        int choice;
+        do {
+            printMenu();
+            choice = readInt("Enter your choice: ");
             switch (choice) {
+                case 1: addStudent(); break;
+                case 2: addRoom(); break;
+                case 3: viewStudents(); break;
+                case 4: viewRooms(); break;
+                case 5: generateSeatingArrangement(); break;
+                case 6: displaySeatingCharts(); break;
+                case 7: saveArrangementToFile(); break;
+                case 8: loadStudentsFromFile(); break;
+                case 9: searchStudentSeat(); break;
+                case 10: showStatistics(); break;
+                case 0: System.out.println("Exiting... Thank you!"); break;
+                default: System.out.println("Invalid choice, try again.");
+            }
+        } while (choice != 0);
+        sc.close();
+    }
 
-                case 1:
-                    reportIncident();
-                    break;
+    private static void printMenu() {
+        System.out.println("\n================ EXAM SEATING ARRANGEMENT GENERATOR ================");
+        System.out.println("1.  Add Student");
+        System.out.println("2.  Add Room");
+        System.out.println("3.  View All Students");
+        System.out.println("4.  View All Rooms");
+        System.out.println("5.  Generate Seating Arrangement");
+        System.out.println("6.  Display Seating Charts");
+        System.out.println("7.  Save Seating Arrangement to File");
+        System.out.println("8.  Load Students from File");
+        System.out.println("9.  Search Student Seat");
+        System.out.println("10. Show Statistics");
+        System.out.println("0.  Exit");
+        System.out.println("======================================================================");
+    }
 
-                case 2:
-                    manager.displayAllIncidents();
-                    break;
+    private static void addStudent() {
+        System.out.print("Enter Roll No: ");
+        String roll = sc.nextLine().trim();
+        System.out.print("Enter Name: ");
+        String name = sc.nextLine().trim();
+        System.out.print("Enter Branch: ");
+        String branch = sc.nextLine().trim();
+        students.add(new Student(roll, name, branch));
+        System.out.println("Student added successfully!");
+    }
 
-                case 3:
-                    searchIncident();
-                    break;
+    private static void addRoom() {
+        System.out.print("Enter Room No: ");
+        String roomNo = sc.nextLine().trim();
+        int r = readInt("Enter number of rows: ");
+        int c = readInt("Enter number of columns: ");
+        rooms.add(new Room(roomNo, r, c));
+        System.out.println("Room added successfully! Capacity = " + (r * c));
+    }
 
-                case 4:
-                    assignTeam();
-                    break;
+    private static void viewStudents() {
+        if (students.isEmpty()) {
+            System.out.println("No students added yet.");
+            return;
+        }
+        System.out.println("\nRollNo\t| Name\t\t| Branch");
+        System.out.println("--------------------------------------");
+        for (Student s : students) {
+            System.out.println(s.getRollNo() + "\t| " + s.getName() + "\t| " + s.getBranch());
+        }
+    }
 
-                case 5:
-                    updateStatus();
-                    break;
+    private static void viewRooms() {
+        if (rooms.isEmpty()) {
+            System.out.println("No rooms added yet.");
+            return;
+        }
+        System.out.println("\nRoomNo\t| Rows x Cols\t| Capacity");
+        System.out.println("--------------------------------------");
+        for (Room r : rooms) {
+            System.out.println(r.getRoomNo() + "\t| " + r.getRows() + " x " + r.getCols() + "\t\t| " + r.getCapacity());
+        }
+    }
 
-                case 6:
-                    runSimulation();
-                    break;
+    private static void generateSeatingArrangement() {
+        if (students.isEmpty() || rooms.isEmpty()) {
+            System.out.println("Please add students and rooms before generating seating.");
+            return;
+        }
+        int totalCapacity = 0;
+        for (Room r : rooms) totalCapacity += r.getCapacity();
 
-                case 7:
-                    ReportGenerator.generate(manager);
-                    break;
+        if (totalCapacity < students.size()) {
+            System.out.println("Warning: Total room capacity (" + totalCapacity +
+                    ") is less than number of students (" + students.size() + ").");
+            System.out.println("Only the first " + totalCapacity + " students will be seated.");
+        }
 
-                case 8:
-                    manager.displayTeams();
-                    break;
+        SeatingGenerator generator = new SeatingGenerator(rooms);
+        generator.generateSeating(students);
+        System.out.println("Seating arrangement generated successfully!");
+    }
 
-                case 0:
-                    running = false;
-                    System.out.println(
-                            "\nThank you for using CyberShield Lite!"
-                    );
-                    break;
+    private static void displaySeatingCharts() {
+        if (rooms.isEmpty()) {
+            System.out.println("No rooms available.");
+            return;
+        }
+        for (Room r : rooms) {
+            r.printChart();
+        }
+    }
 
-                default:
-                    System.out.println(
-                            "\nInvalid choice. Try again."
-                    );
+    private static void saveArrangementToFile() {
+        if (rooms.isEmpty()) {
+            System.out.println("No rooms to save.");
+            return;
+        }
+        System.out.print("Enter file name to save (e.g., seating.txt): ");
+        String fileName = sc.nextLine().trim();
+        FileHandler.saveSeatingToFile(rooms, fileName);
+    }
+
+    private static void loadStudentsFromFile() {
+        System.out.print("Enter file name to load (format: rollNo,name,branch per line): ");
+        String fileName = sc.nextLine().trim();
+        List<Student> loaded = FileHandler.loadStudentsFromFile(fileName);
+        students.addAll(loaded);
+    }
+
+    private static void searchStudentSeat() {
+        System.out.print("Enter Roll No to search: ");
+        String roll = sc.nextLine().trim();
+        boolean found = false;
+        for (Room room : rooms) {
+            Student[][] seats = room.getSeats();
+            for (int i = 0; i < room.getRows(); i++) {
+                for (int j = 0; j < room.getCols(); j++) {
+                    Student s = seats[i][j];
+                    if (s != null && s.getRollNo().equalsIgnoreCase(roll)) {
+                        System.out.println("Found! " + s.getName() + " (" + s.getBranch() + ") is seated in Room "
+                                + room.getRoomNo() + " at Row " + (i + 1) + ", Column " + (j + 1));
+                        found = true;
+                    }
+                }
             }
         }
-
-        scanner.close();
+        if (!found) System.out.println("Student with Roll No " + roll + " not found in any seating chart.");
     }
 
-    private static void showMenu() {
-
-        System.out.println("\n========== MAIN MENU ==========");
-
-        System.out.println(
-                "1. Report New Incident"
-        );
-
-        System.out.println(
-                "2. View All Incidents"
-        );
-
-        System.out.println(
-                "3. Search Incident"
-        );
-
-        System.out.println(
-                "4. Assign Response Team"
-        );
-
-        System.out.println(
-                "5. Update Incident Status"
-        );
-
-        System.out.println(
-                "6. Run Cyber Attack Simulation"
-        );
-
-        System.out.println(
-                "7. Generate Report"
-        );
-
-        System.out.println(
-                "8. View Response Teams"
-        );
-
-        System.out.println(
-                "0. Exit"
-        );
-
-        System.out.println(
-                "=============================="
-        );
-    }
-
-    private static void reportIncident() {
-
-        System.out.println(
-                "\n========== REPORT INCIDENT =========="
-        );
-
-        System.out.print("Incident Title: ");
-        String title = scanner.nextLine();
-
-        if (title.trim().isEmpty()) {
-            System.out.println(
-                    "Title cannot be empty."
-            );
-            return;
+    private static void showStatistics() {
+        Map<String, Integer> branchCount = new TreeMap<>();
+        for (Student s : students) {
+            branchCount.put(s.getBranch(), branchCount.getOrDefault(s.getBranch(), 0) + 1);
         }
+        int totalCapacity = 0;
+        for (Room r : rooms) totalCapacity += r.getCapacity();
 
-        IncidentType type = chooseIncidentType();
-
-        int users = readInt(
-                "Affected Users: "
-        );
-
-        int systems = readInt(
-                "Affected Systems: "
-        );
-
-        if (users < 0 || systems < 0) {
-            System.out.println(
-                    "Values cannot be negative."
-            );
-            return;
+        System.out.println("\n---------------- STATISTICS ----------------");
+        System.out.println("Total Students   : " + students.size());
+        System.out.println("Total Rooms      : " + rooms.size());
+        System.out.println("Total Capacity   : " + totalCapacity);
+        System.out.println("Branch-wise Count:");
+        for (Map.Entry<String, Integer> entry : branchCount.entrySet()) {
+            System.out.println("   " + entry.getKey() + " -> " + entry.getValue());
         }
-
-        System.out.print(
-                "Sensitive Data Involved? (yes/no): "
-        );
-
-        String answer =
-                scanner.nextLine().trim().toLowerCase();
-
-        boolean sensitive =
-                answer.equals("yes");
-
-        Incident incident =
-                new Incident(
-                        title,
-                        type,
-                        users,
-                        systems,
-                        sensitive
-                );
-
-        manager.addIncident(incident);
+        System.out.println("---------------------------------------------");
     }
 
-    private static IncidentType chooseIncidentType() {
-
-        System.out.println("\nSelect Incident Type:");
-
-        IncidentType[] types =
-                IncidentType.values();
-
-        for (int i = 0; i < types.length; i++) {
-
-            System.out.println(
-                    (i + 1) + ". " + types[i]
-            );
+    private static int readInt(String prompt) {
+        System.out.print(prompt);
+        while (!sc.hasNextInt()) {
+            System.out.print("Invalid input. Enter a number: ");
+            sc.next();
         }
-
-        int choice = readInt(
-                "Enter type: "
-        );
-
-        if (choice < 1 ||
-                choice > types.length) {
-
-            System.out.println(
-                    "Invalid type. PHISHING selected."
-            );
-
-            return IncidentType.PHISHING;
-        }
-
-        return types[choice - 1];
-    }
-
-    private static void searchIncident() {
-
-        int id = readInt(
-                "\nEnter Incident ID: "
-        );
-
-        manager.searchIncident(id);
-    }
-
-    private static void assignTeam() {
-
-        int id = readInt(
-                "\nEnter Incident ID: "
-        );
-
-        manager.assignTeam(id);
-    }
-
-    private static void updateStatus() {
-
-        int id = readInt(
-                "\nEnter Incident ID: "
-        );
-
-        Incident incident =
-                manager.findIncident(id);
-
-        if (incident == null) {
-            System.out.println(
-                    "Incident not found."
-            );
-            return;
-        }
-
-        System.out.println(
-                "Current Status: " +
-                incident.getStatus()
-        );
-
-        System.out.println("\nSelect new status:");
-
-        System.out.println(
-                "1. INVESTIGATING"
-        );
-
-        System.out.println(
-                "2. CONTAINED"
-        );
-
-        System.out.println(
-                "3. RESOLVED"
-        );
-
-        int choice = readInt(
-                "Enter choice: "
-        );
-
-        IncidentStatus status;
-
-        switch (choice) {
-
-            case 1:
-                status = IncidentStatus.INVESTIGATING;
-                break;
-
-            case 2:
-                status = IncidentStatus.CONTAINED;
-                break;
-
-            case 3:
-                status = IncidentStatus.RESOLVED;
-                break;
-
-            default:
-                System.out.println(
-                        "Invalid status."
-                );
-                return;
-        }
-
-        manager.updateStatus(id, status);
-    }
-
-    private static void runSimulation() {
-
-        System.out.println(
-                "\n========== CYBER ATTACK SIMULATION =========="
-        );
-
-        Incident i1 = new Incident(
-                "Simulated Phishing Attack",
-                IncidentType.PHISHING,
-                30,
-                1,
-                false
-        );
-
-        Incident i2 = new Incident(
-                "Simulated Malware Attack",
-                IncidentType.MALWARE,
-                80,
-                5,
-                true
-        );
-
-        Incident i3 = new Incident(
-                "Simulated Data Leak",
-                IncidentType.DATA_LEAK,
-                60,
-                4,
-                true
-        );
-
-        manager.addSimulationIncident(i1);
-        manager.addSimulationIncident(i2);
-        manager.addSimulationIncident(i3);
-
-        Thread t1 =
-                new Thread(
-                        new IncidentProcessor(i1, manager)
-                );
-
-        Thread t2 =
-                new Thread(
-                        new IncidentProcessor(i2, manager)
-                );
-
-        Thread t3 =
-                new Thread(
-                        new IncidentProcessor(i3, manager)
-                );
-
-        t1.start();
-        t2.start();
-        t3.start();
-
-        try {
-
-            t1.join();
-            t2.join();
-            t3.join();
-
-        } catch (InterruptedException e) {
-
-            Thread.currentThread().interrupt();
-
-            System.out.println(
-                    "Simulation interrupted."
-            );
-        }
-
-        System.out.println(
-                "\n========== SIMULATION COMPLETE =========="
-        );
-    }
-
-    private static int readInt(String message) {
-
-        while (true) {
-
-            try {
-
-                System.out.print(message);
-
-                int value =
-                        Integer.parseInt(
-                                scanner.nextLine()
-                        );
-
-                return value;
-
-            } catch (NumberFormatException e) {
-
-                System.out.println(
-                        "Please enter a valid number."
-                );
-            }
-        }
-    }
-
-    private static void loadSampleIncidents() {
-
-        Incident sample1 =
-                new Incident(
-                        "Fake College Email",
-                        IncidentType.PHISHING,
-                        40,
-                        2,
-                        false
-                );
-
-        Incident sample2 =
-                new Incident(
-                        "Ransomware Infection",
-                        IncidentType.MALWARE,
-                        100,
-                        6,
-                        true
-                );
-
-        Incident sample3 =
-                new Incident(
-                        "Unauthorized Login",
-                        IncidentType.UNAUTHORIZED_ACCESS,
-                        10,
-                        1,
-                        false
-                );
-
-        manager.addSimulationIncident(sample1);
-        manager.addSimulationIncident(sample2);
-        manager.addSimulationIncident(sample3);
-
-        manager.assignTeam(sample1.getId());
-        manager.assignTeam(sample2.getId());
-        manager.assignTeam(sample3.getId());
-
-        System.out.println(
-                "\nSample incidents loaded."
-        );
+        int val = sc.nextInt();
+        sc.nextLine(); // consume newline
+        return val;
     }
 }
